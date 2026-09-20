@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState, useEffect, useRef } from "react";
-import { createTicket, TICKET_CATEGORIES, type TicketFormState } from "./actions";
+import { createTicket, type TicketFormState } from "./actions";
+import { TICKET_CATEGORIES } from "./ticket-categories";
 
 const initialState: TicketFormState = {};
 
