@@ -1,14 +1,10 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
-import { isAdminEmail } from "@/lib/admin-emails";
+import { getDemoUser } from "@/lib/demo-auth";
 
 export default async function Home() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getDemoUser();
 
-  const loggedInHref = user ? (isAdminEmail(user.email) ? "/admin" : "/dashboard") : "/login";
+  const loggedInHref = user ? (user.isAdmin ? "/admin" : "/dashboard") : "/login";
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-4 text-center">

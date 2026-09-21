@@ -1,24 +1,18 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { isAdminEmail } from "@/lib/admin-emails";
+import { setDemoUser, clearDemoUser } from "@/lib/demo-auth";
+
+// Temporary demo version: accepts any email/password and just remembers the
+// "logged in" user in a cookie, instead of calling Supabase. This lets
+// login/signup be demoed before a real Supabase project is connected.
+// Swap back to real Supabase auth (see git history) when ready.
 
 export type AuthFormState = {
   error?: string;
   info?: string;
 };
-
-async function isEmailBanned(email: string): Promise<boolean> {
-  const admin = createAdminClient();
-  const { data } = await admin
-    .from("banned_emails")
-    .select("email")
-    .eq("email", email.trim().toLowerCase())
-    .maybeSingle();
-  return !!data;
-}
 
 export async function signIn(
   _prevState: AuthFormState,
@@ -31,25 +25,14 @@ export async function signIn(
     return { error: "Email and password are required." };
   }
 
-  if (await isEmailBanned(email)) {
-    return { error: "This email has been banned from this site." };
-  }
-
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.signInWithPassword({
+  await setDemoUser({
+    id: email,
     email,
-    password,
+    name: email.split("@")[0],
+    isAdmin: isAdminEmail(email),
   });
 
-  if (error) {
-    return { error: error.message };
-  }
-
-  if (!data.user?.email_confirmed_at) {
-    redirect("/verify-email");
-  }
-
-  if (isAdminEmail(data.user.email)) {
+  if (isAdminEmail(email)) {
     redirect("/admin");
   }
 
@@ -77,33 +60,16 @@ export async function signUp(
     return { error: "Passwords do not match." };
   }
 
-  if (await isEmailBanned(email)) {
-    return { error: "This email has been banned from this site." };
+  await setDemoUser({ id: email, email, name, isAdmin: isAdminEmail(email) });
+
+  if (isAdminEmail(email)) {
+    redirect("/admin");
   }
 
-  const supabase = await createClient();
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-
-  const { error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: { full_name: name },
-      emailRedirectTo: `${siteUrl}/auth/callback`,
-    },
-  });
-
-  if (error) {
-    return { error: error.message };
-  }
-
-  return {
-    info: "Account created! Check your email for a verification link before signing in.",
-  };
+  redirect("/dashboard");
 }
 
 export async function signOut() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
+  await clearDemoUser();
   redirect("/login");
 }

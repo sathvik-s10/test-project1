@@ -6,23 +6,10 @@ import { TicketList, type Ticket } from "./ticket-list";
 import { UserList } from "./user-list";
 import { BannedList } from "./banned-list";
 
-export default async function AdminPage() {
-  const admin_user = await requireAdmin();
-  const admin = createAdminClient();
-
-  const [{ data: tickets }, { data: usersPage }, { data: banned }] = await Promise.all([
-    admin
-      .from("tickets")
-      .select("id, name, email, category, subject, message, status, admin_reply, created_at")
-      .order("created_at", { ascending: false }),
-    admin.auth.admin.listUsers({ perPage: 1000 }),
-    admin
-      .from("banned_emails")
-      .select("email, reason, banned_by, banned_at")
-      .order("banned_at", { ascending: false }),
-  ]);
-
-  const users = (usersPage?.users ?? [])
+function mapUsers(
+  rawUsers: { id: string; email?: string; created_at: string; email_confirmed_at?: string | null }[]
+) {
+  return rawUsers
     .map((u) => ({
       id: u.id,
       email: u.email ?? "(no email)",
@@ -31,13 +18,41 @@ export default async function AdminPage() {
       isAdmin: isAdminEmail(u.email),
     }))
     .sort((a, b) => (a.email > b.email ? 1 : -1));
+}
 
-  const bannedEmails = (banned ?? []).map((b) => ({
-    email: b.email,
-    reason: b.reason,
-    bannedBy: b.banned_by,
-    bannedAt: b.banned_at,
-  }));
+export default async function AdminPage() {
+  const admin_user = await requireAdmin();
+
+  // User/ticket/ban data still needs a real Supabase project connected -
+  // until then this just shows empty lists instead of crashing the page.
+  let tickets: Ticket[] = [];
+  let users: ReturnType<typeof mapUsers> = [];
+  let bannedEmails: { email: string; reason: string | null; bannedBy: string | null; bannedAt: string }[] = [];
+  try {
+    const admin = createAdminClient();
+    const [{ data: ticketData }, { data: usersPage }, { data: banned }] = await Promise.all([
+      admin
+        .from("tickets")
+        .select("id, name, email, category, subject, message, status, admin_reply, created_at")
+        .order("created_at", { ascending: false }),
+      admin.auth.admin.listUsers({ perPage: 1000 }),
+      admin
+        .from("banned_emails")
+        .select("email, reason, banned_by, banned_at")
+        .order("banned_at", { ascending: false }),
+    ]);
+
+    tickets = (ticketData ?? []) as Ticket[];
+    users = mapUsers(usersPage?.users ?? []);
+    bannedEmails = (banned ?? []).map((b) => ({
+      email: b.email,
+      reason: b.reason,
+      bannedBy: b.banned_by,
+      bannedAt: b.banned_at,
+    }));
+  } catch {
+    // Supabase not connected yet - keep the empty defaults above.
+  }
 
   const openCount = (tickets ?? []).filter((t) => t.status !== "closed").length;
 
