@@ -1,44 +1,33 @@
 import { redirect } from "next/navigation";
-import { getDemoUser } from "@/lib/demo-auth";
 import { createClient } from "@/lib/supabase/server";
+import { isAdminEmail } from "@/lib/admin-emails";
 import { Header } from "@/components/header";
 import { StatusBadge } from "@/components/status-badge";
 import { TicketForm } from "./ticket-form";
 
 export default async function DashboardPage() {
-  const user = await getDemoUser();
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
     redirect("/login");
   }
 
-  if (user.isAdmin) {
+  if (isAdminEmail(user.email)) {
     redirect("/admin");
   }
 
-  const name = user.name || user.email.split("@")[0];
+  const name =
+    (user.user_metadata?.full_name as string | undefined) ??
+    user.email?.split("@")[0] ??
+    "User";
 
-  // Ticket data still needs a real Supabase project connected - until then
-  // this just shows an empty list instead of crashing the page.
-  let tickets: Array<{
-    id: string;
-    subject: string;
-    category: string;
-    status: "open" | "in_progress" | "closed";
-    message: string;
-    admin_reply: string | null;
-    created_at: string;
-  }> = [];
-  try {
-    const supabase = await createClient();
-    const { data } = await supabase
-      .from("tickets")
-      .select("id, subject, category, status, message, admin_reply, created_at")
-      .order("created_at", { ascending: false });
-    tickets = data ?? [];
-  } catch {
-    tickets = [];
-  }
+  const { data: tickets } = await supabase
+    .from("tickets")
+    .select("id, subject, category, status, message, admin_reply, created_at")
+    .order("created_at", { ascending: false });
 
   return (
     <div className="min-h-screen">

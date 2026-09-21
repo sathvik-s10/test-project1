@@ -1,10 +1,16 @@
 import Link from "next/link";
-import { getDemoUser } from "@/lib/demo-auth";
+import { createClient } from "@/lib/supabase/server";
+import { isAdminEmail } from "@/lib/admin-emails";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export default async function Home() {
-  const user = await getDemoUser();
+  // No backend connected yet - nobody can have a real session, so show the
+  // signed-out state instead of crashing trying to check one.
+  const user = isSupabaseConfigured()
+    ? (await (await createClient()).auth.getUser()).data.user
+    : null;
 
-  const loggedInHref = user ? (user.isAdmin ? "/admin" : "/dashboard") : "/login";
+  const loggedInHref = user ? (isAdminEmail(user.email) ? "/admin" : "/dashboard") : "/login";
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-4 text-center">

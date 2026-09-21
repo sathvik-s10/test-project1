@@ -1,13 +1,21 @@
 import "server-only";
 import { redirect } from "next/navigation";
-import { getDemoUser } from "@/lib/demo-auth";
+import { createClient } from "@/lib/supabase/server";
+import { isAdminEmail } from "@/lib/admin-emails";
 
-// Temporary demo version: checks the demo_session cookie instead of a real
-// Supabase session. Swap back to Supabase-backed auth when ready.
+/**
+ * Every admin server action and the /admin page call this first. It re-reads
+ * the session from cookies on the server, so a non-admin can't just guess a
+ * request shape to hit an admin action - the email in ADMIN_EMAILS is
+ * re-checked on every call, not cached client-side.
+ */
 export async function requireAdmin() {
-  const user = await getDemoUser();
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!user || !user.isAdmin) {
+  if (!user || !isAdminEmail(user.email)) {
     redirect("/dashboard");
   }
 
